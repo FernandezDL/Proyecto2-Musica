@@ -13,7 +13,8 @@ BARS_DEFAULT = 4
 STRUCTURE = [
     ("intro", 8), ("verse", 8), ("pre", 4), ("chorus", 8),
     ("verse", 8), ("pre", 4), ("chorus", 8),
-    ("bridge", 4), ("chorus", 8), ("outro", 8)
+    ("bridge", 4), ("chorus", 8), ("outro", 8),
+    ("tail", 8)
 ]
 
 TRACKS = {
@@ -142,6 +143,53 @@ def bass_groove_busier(bars):
         add_notes(ph, [(high, SN), (REST, EN + SN)])       
     return ph
 
+# ----------------- UTIL FX -----------------
+def fade_dynamics(phrase, start_dyn=96, end_dyn=40):
+    """Interpolación lineal de dinámica nota a nota."""
+    notes = phrase.getNoteList()
+    if not notes: return
+    n = len(notes)
+    for i, note in enumerate(notes):
+        dyn = int(start_dyn + (end_dyn - start_dyn) * (float(i) / max(1, n-1)))
+        note.setDynamic(max(0, min(127, dyn)))
+
+def set_dynamics(phrase, dyn=80):
+    for note in phrase.getNoteList():
+        note.setDynamic(dyn)
+
+def arpeggiate_chord(chord_pitches, dur=SN, repeats=2, up_octaves=1):
+    ph = Phrase(0.0)
+    seq = []
+    chord_midi = [to_midi(p) for p in chord_pitches]
+    ascent = []
+    for o in range(up_octaves+1):
+        ascent.extend([m + 12*o for m in chord_midi])
+    seq = ascent * repeats
+    for m in seq:
+        n = Note(m, dur); n.setDynamic(58)
+        ph.addNote(n)
+    return ph
+
+def cymbal_swell_1bar(ride_pitch=51, start_dyn=40, end_dyn=85):
+    ph = Phrase(0.0)
+    steps = 16
+    for i in range(steps):
+        n = Note(ride_pitch, SN)
+        dyn = int(start_dyn + (end_dyn - start_dyn) * (float(i)/max(1, steps-1)))
+        n.setDynamic(dyn)
+        ph.addNote(n)
+    return ph
+
+def long_pad_from_chord(chord_pitches, dur=WN, oct_shift=+1, dyn=54):
+    ph = Phrase(0.0)
+    for p in chord_pitches:
+        m = to_midi(p) + (12*oct_shift)
+        n = Note(m, dur)
+        n.setDynamic(dyn)
+        ph.addNote(n)
+    return ph
+
+
 # ----------------- SECCIONES -----------------
 def sec_intro(bars=BARS_DEFAULT):
     piano = piano_stabs(bars, density=0.5)
@@ -208,9 +256,49 @@ def sec_outro(bars=BARS_DEFAULT):
     ohh   = hat_offbeat(bars)
     return {"PIANO":[piano], "BASS":[bass], "DRUMS":[kick, ohh]}, bars
 
+def sec_tail(bars=8):
+    bars = max(8, bars)  
+    
+    oh12 = hat_offbeat(2)
+    sh12 = shaker_16(2)
+    set_dynamics(oh12, 66); fade_dynamics(oh12, 66, 48)
+    set_dynamics(sh12, 50); fade_dynamics(sh12, 50, 36)
+
+    oh34 = hat_offbeat(2); oh34.setStartTime(2 * WN)
+    set_dynamics(oh34, 46); fade_dynamics(oh34, 46, 34)
+
+    crash = Phrase(0.0); crash.addNote(Note(49, HN)); crash.getNote(0).setDynamic(78)
+    swell_78 = cymbal_swell_1bar(); swell_78.setStartTime(6 * WN)  
+    
+    piano12 = piano_stabs(2, density=0.5); fade_dynamics(piano12, 70, 56)
+    piano3  = piano_stabs(1, density=0.25); piano3.setStartTime(2 * WN); set_dynamics(piano3, 52)
+    piano4  = piano_stabs(1, density=0.25); piano4.setStartTime(3 * WN); set_dynamics(piano4, 46)
+
+    pad5 = long_pad_from_chord(PROG[-2][0], dur=WN, oct_shift=+1, dyn=56); pad5.setStartTime(4 * WN)
+    pad6 = long_pad_from_chord(PROG[-1][0], dur=WN, oct_shift=+1, dyn=54); pad6.setStartTime(5 * WN)
+
+    arp7 = arpeggiate_chord(PROG[-1][0], dur=SN, repeats=2, up_octaves=1); arp7.setStartTime(6 * WN)
+    fade_dynamics(arp7, 60, 48)
+
+    last_chord, last_root = PROG[-1]
+    piano8 = long_pad_from_chord(last_chord, dur=WN + HN, oct_shift=+1, dyn=54); piano8.setStartTime(7 * WN)
+    fade_dynamics(piano8, 54, 28)
+
+    bass8 = Phrase(0.0); bass8.setStartTime(7 * WN)
+    n_bass = Note(to_midi(last_root), WN)  
+    n_bass.setDynamic(44); bass8.addNote(n_bass)
+
+    drums_layers = [oh12, sh12, oh34, crash, swell_78]  
+    return {
+        "PIANO": [piano12, piano3, piano4, pad5, pad6, arp7, piano8],
+        "BASS":  [bass8],
+        "DRUMS": drums_layers
+    }, bars
+
+
 SECTIONS = {
     "intro":sec_intro, "verse":sec_verse, "pre":sec_pre,
-    "chorus":sec_chorus, "bridge":sec_bridge, "outro":sec_outro
+    "chorus":sec_chorus, "bridge":sec_bridge, "outro":sec_outro, "tail":sec_tail
 }
 
 # ----------------- MOTOR -----------------
