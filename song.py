@@ -1,5 +1,8 @@
 # -------------------------------------------------------------
-# 
+# Somewhere in the dark
+# Karen Jimena Hernández Ortega - 21199
+# Diana Lucía Fernández Villatoro - 21747
+# Daniel Esteban Morales Urizar - 21785
 # -------------------------------------------------------------
 
 from music import *
